@@ -1,13 +1,13 @@
 package org.monarchinitiative.ristretto;
 
-import com.google.common.collect.AbstractIterator;
 
 import java.util.*;
 
 import static java.util.Objects.requireNonNull;
 
 /**
- * Directed Value graph implemented using Compressed Sparse Row.
+ * Directed Value graph implemented using Compressed Sparse Row. The maximum size of this is the Integer max value i.e.
+ * 2^31 or 2,147,483,647 edges.
  *
  * @author Jules Jacobsen <j.jacobsen@qmul.ac.uk>
  */
@@ -21,7 +21,7 @@ public class CsrDirectedGraph<N, V> {
     private final V[] values;
 
     private CsrDirectedGraph(Map<N, Integer> nodesIndex, int[] offsets, N[] edges, V[] values) {
-        this.nodesIndex = nodesIndex;
+        this.nodesIndex = Collections.unmodifiableMap(nodesIndex);
         this.offsets = offsets;
         this.edges = edges;
         this.values = values;
@@ -29,6 +29,10 @@ public class CsrDirectedGraph<N, V> {
 
     public int nodeCount() {
         return nodesIndex.size();
+    }
+
+    public boolean containsNode(N node) {
+        return nodesIndex.containsKey(node);
     }
 
     public Set<N> nodes() {
@@ -41,29 +45,34 @@ public class CsrDirectedGraph<N, V> {
 
     public Set<N> successors(N node) {
         // need to maintain order otherwise valueOfEdge
+        int nodeIndex = getNodeIndex(node);
+        if (nodeIndex < 0) {
+            throw new NoSuchElementException("Node not found: " + node);
+        }
+
         return new AbstractSet<>() {
-            private final N[] successors = successorsAsArray(node);
+            private final int start = offsets[nodeIndex];
+            private final int end = offsets[nodeIndex + 1];
 
             @Override
             public Iterator<N> iterator() {
-                return new ArrayIterator<>(successors);
+                return new ArrayIterator<>(edges, start, end);
             }
 
             @Override
             public int size() {
-                return successors.length;
+                return end - start;
             }
         };
     }
 
-    private N[] successorsAsArray(N node) {
-        int nodeIndex = nodesIndex.get(node);
-        return Arrays.copyOfRange(edges, offsets[nodeIndex], offsets[nodeIndex + 1]);
+    public int outDegree(N node) {
+        int nodeIndex = getNodeIndex(node);
+        return offsets[nodeIndex + 1] - offsets[nodeIndex];
     }
 
-    public int outDegree(N node) {
-        int nodeIndex = nodesIndex.get(node);
-        return offsets[nodeIndex + 1] - offsets[nodeIndex];
+    private int getNodeIndex(N node) {
+        return nodesIndex.getOrDefault(node, -1);
     }
 
     public boolean hasEdgeConnecting(N nodeU, N nodeV) {
@@ -74,17 +83,18 @@ public class CsrDirectedGraph<N, V> {
         requireNonNull(nodeU);
         requireNonNull(nodeV);
 
-        if (!nodesIndex.containsKey(nodeU) || !nodesIndex.containsKey(nodeV)) {
+        if (!containsNode(nodeU) || !containsNode(nodeV)) {
             return null;
         }
 
-        int nodeIndex = nodesIndex.get(nodeU);
-        N[] successors = successorsAsArray(nodeU);
+        int nodeIndex = getNodeIndex(nodeU);
+        int start = offsets[nodeIndex];
+        int end = offsets[nodeIndex + 1];
         // not efficient for large numbers of successors - use binary search if these can be ordered when graph is created
-        for (int i = 0; i < successors.length; i++) {
-            N node = successors[i];
+        for (int i = 0; i < end - start; i++) {
+            N node = edges[start + i];
             if (nodeV.equals(node)) {
-                return values[offsets[nodeIndex] + i];
+                return values[start + i];
             }
         }
         return null;
@@ -101,23 +111,23 @@ public class CsrDirectedGraph<N, V> {
         // adjacency lists for every forward / reverse edge
         private Map<N, Set<ValueEdge<N, V>>> graph = new TreeMap<>();
 
-        public CsrDirectedGraph.Builder<N, V> putEdgeValue(N nodeA, N nodeB, V value) {
-            requireNonNull(nodeA);
-            requireNonNull(nodeB);
+        public CsrDirectedGraph.Builder<N, V> putEdgeValue(N source, N target, V value) {
+            requireNonNull(source);
+            requireNonNull(target);
             requireNonNull(value);
 
             // this is forwards-only e.g. A -> B  for a directed graph.
-            Set<ValueEdge<N, V>> edges1;
-            if (graph.containsKey(nodeA)) {
-                edges1 = graph.get(nodeA);
+            Set<ValueEdge<N, V>> sourceEdges;
+            if (graph.containsKey(source)) {
+                sourceEdges = graph.get(source);
             } else {
-                edges1 = new LinkedHashSet<>();
-                graph.put(nodeA, edges1);
+                sourceEdges = new LinkedHashSet<>();
+                graph.put(source, sourceEdges);
             }
-            edges1.add(ValueEdge.of(nodeA, value, nodeB));
+            sourceEdges.add(ValueEdge.of(source, value, target));
 
-            // ensure nodeB is also represented as this might be a leaf node and only occur here
-            graph.computeIfAbsent(nodeB, node -> new LinkedHashSet<>());
+            // ensure target is also represented as this might be a leaf node and only occur here
+            graph.computeIfAbsent(target, node -> new LinkedHashSet<>());
 
             return this;
         }
@@ -131,13 +141,15 @@ public class CsrDirectedGraph<N, V> {
                 nodesIndex.put(n, index++);
             }
 
+            int[] offsets = new int[graph.size() + 1];
+
             int edgeCount = 0;
             for (Set<ValueEdge<N, V>> edge : graph.values()) {
                 edgeCount += edge.size();
             }
-
-            int[] offsets = new int[graph.size() + 1];
+            @SuppressWarnings("unchecked")
             N[] successors = (N[]) new Object[edgeCount];
+            @SuppressWarnings("unchecked")
             V[] values = (V[]) new Object[edgeCount];
 
             int currentEdgeIndex = 0;
@@ -150,7 +162,8 @@ public class CsrDirectedGraph<N, V> {
                 }
                 offsets[nodeIndex + 1] = currentEdgeIndex;
             }
-
+            // clean-up?
+            graph = null;
             return new CsrDirectedGraph<>(nodesIndex, offsets, successors, values);
         }
     }
@@ -159,36 +172,31 @@ public class CsrDirectedGraph<N, V> {
     private static final class ArrayIterator<E> implements Iterator<E> {
 
         private final E[] array;
-        private final int size;
+        private final int end;
         private int cursor;
 
-        ArrayIterator(E[] array) {
+        ArrayIterator(E[] array, int start, int end) {
             this.array = array;
-            this.size = array.length;
-            this.cursor = 0;
+            this.end = end;
+            this.cursor = start;
         }
 
         public boolean hasNext() {
-            return cursor != size;
+            return cursor < end;
         }
 
         public E next() {
             try {
-                int i = cursor;
-                E next = array[i];
-                cursor = i + 1;
-                return next;
+                return array[cursor++];
             } catch (IndexOutOfBoundsException e) {
                 throw new NoSuchElementException();
             }
         }
 
+        @Override
         public void remove() {
             throw new UnsupportedOperationException();
         }
 
-        public void add(E e) {
-            throw new UnsupportedOperationException();
-        }
     }
 }
