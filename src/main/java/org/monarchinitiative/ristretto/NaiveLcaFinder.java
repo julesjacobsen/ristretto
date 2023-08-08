@@ -1,9 +1,9 @@
 package org.monarchinitiative.ristretto;
 
-import org.jgrapht.alg.lca.BinaryLiftingLCAFinder;
-import org.jgrapht.alg.lca.EulerTourRMQLCAFinder;
-import org.jgrapht.alg.lca.HeavyPathLCAFinder;
-import org.jgrapht.alg.lca.TarjanLCAFinder;
+//import org.jgrapht.alg.lca.BinaryLiftingLCAFinder;
+//import org.jgrapht.alg.lca.EulerTourRMQLCAFinder;
+//import org.jgrapht.alg.lca.HeavyPathLCAFinder;
+//import org.jgrapht.alg.lca.TarjanLCAFinder;
 
 import java.lang.reflect.Array;
 import java.util.*;
@@ -92,17 +92,18 @@ public class NaiveLcaFinder<N, V> {
         if (!graph.containsNode(b))
             throw new IllegalArgumentException("invalid vertex: " + b);
 
-        return findLca(
-                Collections.singleton(a), Collections.singleton(b), new LinkedHashSet<>(),
-                new LinkedHashSet<>());
+        if (a.equals(b)) {
+            return a;
+        }
+        return findLca(Set.of(a), Set.of(b), new LinkedHashSet<>(), new LinkedHashSet<>());
     }
 
     /**
      * {@inheritDoc}
      */
     public Set<N> getLCASet(N a, N b) {
-        @SuppressWarnings("unchecked") Set<N>[] visitedSets =
-                (Set<N>[]) Array.newInstance(Set.class, 2);
+        @SuppressWarnings("unchecked")
+        Set<N>[] visitedSets = (Set<N>[]) Array.newInstance(Set.class, 2);
         // set of nodes visited from a
         visitedSets[0] = new LinkedHashSet<>();
         // set of nodes visited from b
@@ -144,8 +145,8 @@ public class NaiveLcaFinder<N, V> {
      * ancestors won't be part of the SLCA(x, y) set).
      */
     private void doubleBfs(N a, N b, Set<N>[] visitedSets) {
-        @SuppressWarnings("unchecked") Queue<N>[] queues =
-                (Queue<N>[]) Array.newInstance(Queue.class, 2);
+        @SuppressWarnings("unchecked")
+        Queue<N>[] queues = (Queue<N>[]) Array.newInstance(Queue.class, 2);
         queues[0] = new ArrayDeque<>();
         queues[1] = new ArrayDeque<>();
 
@@ -176,8 +177,7 @@ public class NaiveLcaFinder<N, V> {
      * members of sets aSeenSet and bSeenSet respectively, along with all elements on the paths from
      * every member of aSet and bSet
      */
-    private N findLca(
-            Set<N> aSet, Set<N> bSet, LinkedHashSet<N> aSeenSet, LinkedHashSet<N> bSeenSet) {
+    private N findLca(Set<N> aSet, Set<N> bSet, LinkedHashSet<N> aSeenSet, LinkedHashSet<N> bSeenSet) {
         while (true) {
             // if there is no LCA...
             if ((aSet.isEmpty()) && (bSet.isEmpty())) {
