@@ -1,93 +1,20 @@
 package org.monarchinitiative.ristretto;
 
-import com.google.common.collect.ImmutableSet;
-import com.google.common.graph.ImmutableValueGraph;
-import com.google.common.graph.ValueGraph;
-import com.google.common.graph.ValueGraphBuilder;
-import org.geneontology.obographs.core.io.OgJsonReader;
-import org.geneontology.obographs.core.model.Graph;
-import org.geneontology.obographs.core.model.GraphDocument;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.*;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.*;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author Jules Jacobsen <j.jacobsen@qmul.ac.uk>
  */
 class OntologyTest {
 
-    private static final Graph hp;
-    static {
-        GraphDocument graphDocument = null;
-        try {
-            graphDocument = OgJsonReader.readFile("/home/hhx640/Documents/hp.json");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        hp = graphDocument.getGraphs().get(0);
-    }
-
-    //    @Disabled
-    @Test
-    void testOboGraphJsonInput() throws Exception {
-        Instant start = Instant.now();
-        Map<String, Node> hpNodes = hp.getNodes().stream().filter(node -> node.getId().contains("HP_"))
-                .map(node -> Node.of(node.getId(), node.getLabel()))
-                .collect(Collectors.toMap(Node::getId, Function.identity()));
-        Node isA = Node.of("RO:0000111", "is_a");
-
-        Ontology.Builder<Node, Node> ontologyBuilder = Ontology.<Node, Node>builder();
-        hp.getEdges().stream().filter(edge -> edge.getSub().contains("HP_"))
-                .forEach(edge -> {
-                    Node subject = hpNodes.get(edge.getSub());
-                    Node object = hpNodes.get(edge.getObj());
-                    if (subject != null && object != null) {
-                        ontologyBuilder.putEdgeValue(subject, isA, object);
-                    }
-                });
-        Ontology<Node, Node> hpo = ontologyBuilder.build();
-        Instant end = Instant.now();
-        System.out.println("Loaded hpo with " + hpo.nodeCount() + " nodes in " + Duration.between(start, end).toMillis() + "ms");
-
-        Instant queriesStart = Instant.now();
-
-        Node all = Node.of("http://purl.obolibrary.org/obo/HP_0000001", "All");
-//        assertThat(graph.predecessors(Node.of("http://purl.obolibrary.org/obo/HP_0000001", "All")), equalTo(Set.of()));
-
-//        var lcaFinder = new NaiveLcaFinder<>(ONTOLOGY);
-        Node modeOfInheritance = Node.of("http://purl.obolibrary.org/obo/HP_0000005", "Mode of inheritance");
-        Node phenotypicAbnormality = Node.of("http://purl.obolibrary.org/obo/HP_0000118", "Phenotypic abnormality");
-        assertThat(hpo.getLCA(phenotypicAbnormality, modeOfInheritance), equalTo(all));
-
-        Node neoplasmOfTheParathyroidGland = Node.of("http://purl.obolibrary.org/obo/HP_0100733", "Neoplasm of the parathyroid gland");
-        Node delayedThelarche = Node.of("http://purl.obolibrary.org/obo/HP_0025515", "Delayed thelarche");
-        Node abnormalityOfTheEndocrineSystem = Node.of("http://purl.obolibrary.org/obo/HP_0000818", "Abnormality of the endocrine system");
-        assertThat(hpo.getLCA(delayedThelarche, neoplasmOfTheParathyroidGland), equalTo(abnormalityOfTheEndocrineSystem));
-
-        Node abnormalCirculatingHormoneConcentration = Node.of("http://purl.obolibrary.org/obo/HP_0003117", "Abnormal circulating hormone concentration");
-
-        System.out.println("CSR predecessors" + hpo.predecessors(abnormalCirculatingHormoneConcentration));
-        System.out.println("CSR successors" + hpo.successors(abnormalCirculatingHormoneConcentration));
-
-        System.out.println("CSR ancestors of: " + abnormalCirculatingHormoneConcentration);
-        assertThat(ancestors(abnormalCirculatingHormoneConcentration, hpo), equalTo(Set.of(all, phenotypicAbnormality, abnormalityOfTheEndocrineSystem, abnormalCirculatingHormoneConcentration)));
-        ancestors(abnormalCirculatingHormoneConcentration, hpo).stream().forEach(node -> System.out.println(node + " -> "));
-        System.out.println("CSR descendants of: " + abnormalCirculatingHormoneConcentration);
-        descendents(abnormalCirculatingHormoneConcentration, hpo).stream().forEach(node -> System.out.println(node + " -> "));
-
-        System.out.println("Queries took " + Duration.between(queriesStart, Instant.now()).toMillis() + "ms");
-    }
+    private static final Logger logger = LoggerFactory.getLogger(OntologyTest.class);
 
     @Test
     void testDirectedAcyclicGraph() {
@@ -100,17 +27,20 @@ class OntologyTest {
         Node cloudwaterIpa = Node.of("BO:00007", "Cloudwater IPA");
         // edge value
         Node isA = Node.of("RO:0000111", "is_a");
+        Node hasSubClass = Node.of("RO:0000111", "hasSubClass");
 
         Ontology<Node, Node> graph = Ontology.<Node, Node>builder()
-                .putEdgeValue(ipa, isA, beer)
-                .putEdgeValue(westCoastIpa, isA, ipa)
-                .putEdgeValue(newEnglandIpa, isA, ipa)
-                .putEdgeValue(cloudwaterIpa, isA, newEnglandIpa)
-                .putEdgeValue(gooseIsland, isA, westCoastIpa)
-                .putEdgeValue(titanIpa, isA, westCoastIpa)
+                .addAxiom(ipa, isA, beer)
+//                .addAxiom(beer, hasSubClass, ipa)
+                .addAxiom(westCoastIpa, isA, ipa)
+                .addAxiom(newEnglandIpa, isA, ipa)
+                .addAxiom(cloudwaterIpa, isA, newEnglandIpa)
+                .addAxiom(gooseIsland, isA, westCoastIpa)
+                .addAxiom(titanIpa, isA, westCoastIpa)
                 .build();
 
-        System.out.println(graph);
+        System.out.println(graph.successors(beer));
+        System.out.println(graph.edgeValue(beer, ipa));
 
         assertThat(graph.predecessors(beer), equalTo(Set.of()));
         assertThat(graph.predecessors(ipa), equalTo(Set.of(beer)));
@@ -160,39 +90,45 @@ class OntologyTest {
         assertThat(graph.hasEdgeConnecting(ipa, beer), is(true));
         assertThat(graph.hasEdgeConnecting(beer, ipa), is(false));
         assertThat(graph.hasEdgeConnecting(titanIpa, beer), is(false));
+
+        assertThat(graph.getLCA(beer, ipa), equalTo(beer));
+        assertThat(graph.getLCA(ipa, ipa), equalTo(ipa));
+        assertThat(graph.getLCA(ipa, titanIpa), equalTo(ipa));
+        assertThat(graph.getLCA(titanIpa, ipa), equalTo(ipa));
+        assertThat(graph.getLCA(newEnglandIpa, westCoastIpa), equalTo(ipa));
+        assertThat(graph.getLCA(gooseIsland, titanIpa), equalTo(westCoastIpa));
+        assertThat(graph.getLCA(cloudwaterIpa, titanIpa), equalTo(ipa));
+        assertThat(graph.getLCA(cloudwaterIpa, newEnglandIpa), equalTo(newEnglandIpa));
     }
 
     @Test
     void testDirectedCircularGraph() {
         Ontology<Integer, Integer> graph = Ontology.<Integer, Integer>builder()
-                .putEdgeValue(1, 0, 2)
-                .putEdgeValue(1, 1, 3)
-                .putEdgeValue(1, 2, 4)
-                .putEdgeValue(2, 3, 4)
-                .putEdgeValue(3, 4, 1)
-                .putEdgeValue(3, 5, 4)
-                .putEdgeValue(3, 4, 6)
-                .putEdgeValue(4, 6, 2)
-                .putEdgeValue(4, 7, 3)
-                .putEdgeValue(4, 8, 4)
-                .putEdgeValue(4, 9, 5)
+                .addEdge(1, 0, 2)
+                .addEdge(1, 1, 3)
+                .addEdge(1, 2, 4)
+                .addEdge(2, 3, 4)
+                .addEdge(3, 4, 1)
+                .addEdge(3, 5, 4)
+                .addEdge(4, 6, 2)
+                .addEdge(4, 7, 3)
+                .addEdge(4, 8, 4)
+                .addEdge(4, 9, 5)
                 .build();
 
         System.out.println("Children of 1: " +  graph.successors(1));
 
         assertThat(graph.successors(1), equalTo(Set.of(2, 3, 4)));
         assertThat(graph.successors(2), equalTo(Set.of(4)));
-        assertThat(graph.successors(3), equalTo(Set.of(1, 4, 6)));
+        assertThat(graph.successors(3), equalTo(Set.of(1, 4)));
         assertThat(graph.successors(4), equalTo(Set.of(2, 3, 4, 5)));
         assertThat(graph.successors(5), equalTo(Set.of()));
-        assertThat(graph.successors(6), equalTo(Set.of()));
 
         assertThat(graph.isLeafNode(1), is(false));
         assertThat(graph.isLeafNode(2), is(false));
         assertThat(graph.isLeafNode(3), is(false));
         assertThat(graph.isLeafNode(4), is(false));
         assertThat(graph.isLeafNode(5), is(true));
-        assertThat(graph.isLeafNode(6), is(true));
 
         assertThat(graph.inDegree(1), equalTo(1));
         assertThat(graph.outDegree(1), equalTo(3));
@@ -201,16 +137,13 @@ class OntologyTest {
         assertThat(graph.outDegree(2), equalTo(1));
 
         assertThat(graph.inDegree(3), equalTo(2));
-        assertThat(graph.outDegree(3), equalTo(3));
+        assertThat(graph.outDegree(3), equalTo(2));
 
         assertThat(graph.inDegree(4), equalTo(4));
         assertThat(graph.outDegree(4), equalTo(4));
 
         assertThat(graph.inDegree(5), equalTo(1));
         assertThat(graph.outDegree(5), equalTo(0));
-
-        assertThat(graph.inDegree(6), equalTo(1));
-        assertThat(graph.outDegree(6), equalTo(0));
 
         assertThat(graph.getValueOfEdge(1, 2), equalTo(0));
         assertThat(graph.getValueOfEdge(1, 3), equalTo(1));
@@ -219,19 +152,27 @@ class OntologyTest {
         assertThat(graph.getValueOfEdge(2, 4), equalTo(3));
         assertThat(graph.getValueOfEdge(3, 1), equalTo(4));
         assertThat(graph.getValueOfEdge(3, 4), equalTo(5));
-        assertThat(graph.getValueOfEdge(3, 6), equalTo(4));
         assertThat(graph.getValueOfEdge(4, 2), equalTo(6));
         assertThat(graph.getValueOfEdge(4, 3), equalTo(7));
         assertThat(graph.getValueOfEdge(4, 4), equalTo(8));
         assertThat(graph.getValueOfEdge(4, 5), equalTo(9));
 
         assertThat(pathExists(1,5, graph), is(true));
-        assertThat(pathExists(4,6, graph), is(true));
+        assertThat(pathExists(5,1, graph), is(false));
+        assertThat(pathExists(2,3, graph), is(true));
+        assertThat(pathExists(3,2, graph), is(true));
+
+        assertThat(pathExists(1,1, graph), is(true));
+//        assertThat(pathExists(5,5, graph), is(false));
+
+        assertThat(graph.getLCA(2,3), equalTo(1));
+
 
         dfs(1, graph);
         System.out.println();
         dfs(4, graph);
         System.out.println();
+
         bfs(4, graph);
         System.out.println();
         bfs(3, graph);
@@ -239,13 +180,14 @@ class OntologyTest {
 
     @Test
     void testSimpleTreeOrderedInput() {
-        Ontology<Integer, Integer> graph = Ontology.<Integer, Integer>builder()
-                .putEdgeValue(1, 0, 2)
-                .putEdgeValue(1, 0, 3)
-                .putEdgeValue(2, 0, 4)
-                .putEdgeValue(2, 0, 5)
-                .putEdgeValue(5, 0, 6)
+        Ontology<Integer, String> graph = Ontology.<Integer, String>builder()
+                .addEdge(1, "hasChild", 2)
+                .addEdge(1, "hasChild", 3)
+                .addEdge(2, "hasChild", 4)
+                .addEdge(2, "hasChild", 5)
+                .addEdge(5, "hasChild", 6)
                 .build();
+//        System.out.println(graph.edges());
 
         System.out.println("Children of 1: " +  graph.successors(1));
 
@@ -277,71 +219,39 @@ class OntologyTest {
     @Test
     void testSimpleTreeUnorderedInput() {
         Ontology<Integer, Integer> graph = Ontology.<Integer, Integer>builder()
-                .putEdgeValue(2, 0, 4)
-                .putEdgeValue(1, 0, 2)
-                .putEdgeValue(5, 0, 6)
-                .putEdgeValue(2, 0, 5)
-                .putEdgeValue(1, 0, 3)
+                .addEdge(2, 0, 4)
+                .addEdge(1, 0, 2)
+                .addEdge(5, 0, 6)
+                .addEdge(2, 0, 5)
+                .addEdge(1, 0, 3)
                 .build();
 
         System.out.println("Children of 1: " +  graph.successors(1));
 
-        assertThat(graph.predecessors(1), equalTo(Set.of(2, 3)));
-        assertThat(graph.predecessors(2), equalTo(Set.of(4, 5)));
-        assertThat(graph.predecessors(3), equalTo(Set.of()));
-        assertThat(graph.predecessors(4), equalTo(Set.of()));
-        assertThat(graph.predecessors(5), equalTo(Set.of(6)));
-        assertThat(graph.predecessors(6), equalTo(Set.of()));
+        assertThat(graph.successors(1), equalTo(Set.of(2, 3)));
+        assertThat(graph.successors(2), equalTo(Set.of(4, 5)));
+        assertThat(graph.successors(3), equalTo(Set.of()));
+        assertThat(graph.successors(4), equalTo(Set.of()));
+        assertThat(graph.successors(5), equalTo(Set.of(6)));
+        assertThat(graph.successors(6), equalTo(Set.of()));
 
-        assertThat(graph.isLeafNode(1), is(true));
-        assertThat(graph.getLeafNodes(), equalTo(Set.of(1)));
+        assertThat(graph.isRootNode(1), is(true));
+        assertThat(graph.getRootNodes(), equalTo(Set.of(1)));
 
-        assertThat(graph.getRootNodes(), equalTo(Set.of(3, 4, 6)));
+        assertThat(graph.getLeafNodes(), equalTo(Set.of(3, 4, 6)));
 
-        assertThat(graph.isRootNode(1), is(false));
-        assertThat(graph.isRootNode(2), is(false));
-        assertThat(graph.isRootNode(3), is(true));
-        assertThat(graph.isRootNode(4), is(true));
-        assertThat(graph.isRootNode(5), is(false));
-        assertThat(graph.isRootNode(6), is(true));
+        assertThat(graph.isLeafNode(1), is(false));
+        assertThat(graph.isLeafNode(2), is(false));
+        assertThat(graph.isLeafNode(3), is(true));
+        assertThat(graph.isLeafNode(4), is(true));
+        assertThat(graph.isLeafNode(5), is(false));
+        assertThat(graph.isLeafNode(6), is(true));
     }
 
     @Test
     void testValueOfNonExistentEdge() {
         Ontology<Integer, Integer> graph = Ontology.<Integer, Integer>builder().build();
         assertThat(graph.getValueOfEdge(1, 2), nullValue());
-    }
-
-    @Test
-    void traverseUpTreeAndGetEdgeValue() {
-        Instant start = Instant.now();
-        Map<String, Node> hpNodes = hp.getNodes().stream().filter(node -> node.getId().contains("HP_"))
-                .map(node -> Node.of(node.getId(), node.getLabel()))
-                .collect(Collectors.toMap(Node::getId, Function.identity()));
-        Node isA = Node.of("RO:0000111", "is_a");
-
-        ImmutableValueGraph.Builder<Node, Node> graphBuilder = ValueGraphBuilder
-                .directed()
-                .<Node, Node>immutable();
-                // Ontology needs to become a CsrDirectedGraph and then a new Ontology needs to have reversed bfs/dfs/root/leaf operations
-//        Ontology<Node, Node> graph = Ontology.<Node, Node>builder()
-
-        hp.getEdges().stream().filter(edge -> edge.getSub().contains("HP_"))
-                .forEach(edge -> {
-                    Node subject = hpNodes.get(edge.getSub());
-                    Node object = hpNodes.get(edge.getObj());
-                    if (subject != null && object != null) {
-                        graphBuilder.putEdgeValue(object, subject, isA);
-                    }
-                });
-        ValueGraph<Node, Node> graph = graphBuilder.build();
-        Instant end = Instant.now();
-        System.out.println("Loaded hpo with " + graph.nodes().size() + " nodes in " + Duration.between(start, end).toMillis() + "ms");
-        Node abnormalCirculatingHormoneConcentration = Node.of("http://purl.obolibrary.org/obo/HP_0003117", "Abnormal circulating hormone concentration");
-
-        System.out.println("Guava sucessors" + graph.successors(abnormalCirculatingHormoneConcentration));
-        System.out.println("Guava predecessors" + graph.predecessors(abnormalCirculatingHormoneConcentration));
-
     }
 
     @Test
@@ -361,12 +271,12 @@ class OntologyTest {
 //                .directed()
 //                .<Node, Node>immutable()
         Ontology<Node, Node> ontology = Ontology.<Node, Node>builder()
-                .putEdgeValue(ipa, isA, beer)
-                .putEdgeValue(westCoastIpa, isA, ipa)
-                .putEdgeValue(newEnglandIpa, isA, ipa)
-                .putEdgeValue(cloudwaterIpa, isA, newEnglandIpa)
-                .putEdgeValue(gooseIsland, isA, westCoastIpa)
-                .putEdgeValue(titanIpa, isA, westCoastIpa)
+                .addAxiom(ipa, isA, beer)
+                .addAxiom(westCoastIpa, isA, ipa)
+                .addAxiom(newEnglandIpa, isA, ipa)
+                .addAxiom(cloudwaterIpa, isA, newEnglandIpa)
+                .addAxiom(gooseIsland, isA, westCoastIpa)
+                .addAxiom(titanIpa, isA, westCoastIpa)
                 .build();
 
         System.out.println("Depth First Search");
@@ -380,11 +290,11 @@ class OntologyTest {
 
         assertThat(ontology.getLeafNodes(), equalTo(Set.of(cloudwaterIpa, gooseIsland, titanIpa)));
 
-        assertThat(descendents(newEnglandIpa, ontology), equalTo(ImmutableSet.of(newEnglandIpa, cloudwaterIpa)));
-        assertThat(descendents(westCoastIpa, ontology), equalTo(ImmutableSet.of(westCoastIpa, titanIpa, gooseIsland)));
+        assertThat(descendents(newEnglandIpa, ontology), equalTo(Set.of(newEnglandIpa, cloudwaterIpa)));
+        assertThat(descendents(westCoastIpa, ontology), equalTo(Set.of(westCoastIpa, titanIpa, gooseIsland)));
 
-        assertThat(ancestors(titanIpa, ontology), equalTo(ImmutableSet.of(titanIpa, westCoastIpa, ipa, beer)));
-        assertThat(ancestors(cloudwaterIpa, ontology), equalTo(ImmutableSet.of(cloudwaterIpa, newEnglandIpa, ipa, beer)));
+        assertThat(ancestors(titanIpa, ontology), equalTo(Set.of(titanIpa, westCoastIpa, ipa, beer)));
+        assertThat(ancestors(cloudwaterIpa, ontology), equalTo(Set.of(cloudwaterIpa, newEnglandIpa, ipa, beer)));
 
         assertThat(pathExists(titanIpa, gooseIsland, ontology), is(false));
         assertThat(pathExists(ipa, gooseIsland, ontology), is(true));
@@ -467,9 +377,9 @@ class OntologyTest {
     }
 
     <N, V> boolean pathExists(N start, N end, Ontology<N, V> graph) {
-        if (start.equals(end)) {
-            return false;
-        }
+//        if (start.equals(end)) {
+//            return false;
+//        }
         // BFS
         Set<N> seen = new HashSet<>(graph.nodeCount());
         Deque<N> deque = new ArrayDeque<>(graph.nodeCount());
