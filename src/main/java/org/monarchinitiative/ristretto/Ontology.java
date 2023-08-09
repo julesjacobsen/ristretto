@@ -152,6 +152,41 @@ public class Ontology<N, V> extends AbstractValueGraph<N, V> {
         return edgeValueOrDefault(endpoints.nodeU(), endpoints.nodeV(), defaultValue);
     }
 
+    public Set<N> ancestors(N node) {
+        Deque<N> deque = new ArrayDeque<>();
+        deque.push(node);
+        Set<N> ancestors = new LinkedHashSet<>();
+        N current;
+        while(!deque.isEmpty()) {
+            current = deque.pop();
+            if (!ancestors.contains(current)) {
+                ancestors.add(current);
+                for (N predecessor : this.predecessors(current)) {
+                    deque.push(predecessor);
+                }
+            }
+        }
+        ancestors.remove(node);
+        return ancestors;
+    }
+
+    public Set<N> descendents(N node) {
+        Deque<N> deque = new ArrayDeque<>();
+        deque.push(node);
+        Set<N> descendents = new LinkedHashSet<>();
+        N current;
+        while(!deque.isEmpty()) {
+            current = deque.pop();
+            if (!descendents.contains(current)) {
+                descendents.add(current);
+                for (N decendent : this.successors(current)) {
+                    deque.push(decendent);
+                }
+            }
+        }
+        descendents.remove(node);
+        return descendents;
+    }
 
     @Override
     public String toString() {

@@ -72,7 +72,8 @@ public class CsrDirectedGraph<N, V> {
     }
 
     private int getNodeIndex(N node) {
-        return nodesIndex.getOrDefault(node, -1);
+        var index = nodesIndex.get(node);
+        return index == null ? -1 : index;
     }
 
     public boolean hasEdgeConnecting(N nodeU, N nodeV) {

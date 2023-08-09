@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -94,17 +95,17 @@ public class HpoComparisonTests {
     }
 
     @Test
-    void compareResults() {
+    void comparePredecessorSuccessor() {
         CurieUtil curieUtil = CurieUtilBuilder.defaultCurieUtil();
         MinimalOntology phenolOntology = MinimalOntologyLoader.loadOntology(TestOntologyGraphs.HPO_GRAPH_DOCUMENT, curieUtil);
         OntologyGraph<TermId> phenolHpo = phenolOntology.graph();
         TermId abnormalCirculatingHormoneConcentrationId = curieUtil.getCurie(abnormalCirculatingHormoneConcentration.getId()).get();
 
         Set<Node> phenolPredecessors = phenolHpo.getParentsStream(abnormalCirculatingHormoneConcentrationId, false)
-                .map(termId -> Node.of(curieUtil.getIri(termId).orElseThrow(), phenolOntology.termForTermId(termId).orElseThrow().getName()))
+                .map(termIdToNode(curieUtil, phenolOntology))
                 .collect(Collectors.toUnmodifiableSet());
         Set<Node> phenolSuccessors = phenolHpo.getChildrenStream(abnormalCirculatingHormoneConcentrationId, false)
-                .map(termId -> Node.of(curieUtil.getIri(termId).orElseThrow(), phenolOntology.termForTermId(termId).orElseThrow().getName()))
+                .map(termIdToNode(curieUtil, phenolOntology))
                 .collect(Collectors.toUnmodifiableSet());
 
         Ontology<Node, Node> ristrettoHpo = TestOntologyGraphs.ristrettoHpo();
@@ -122,4 +123,30 @@ public class HpoComparisonTests {
         assertThat(ristrettoSuccessors, equalTo(guavaSuccessors));
     }
 
+    @Test
+    void compareAncestorsDescendents() {
+        CurieUtil curieUtil = CurieUtilBuilder.defaultCurieUtil();
+        MinimalOntology phenolOntology = MinimalOntologyLoader.loadOntology(TestOntologyGraphs.HPO_GRAPH_DOCUMENT, curieUtil);
+        OntologyGraph<TermId> phenolHpo = phenolOntology.graph();
+        TermId abnormalCirculatingHormoneConcentrationId = curieUtil.getCurie(abnormalCirculatingHormoneConcentration.getId()).get();
+
+        Set<Node> phenolAncestors = phenolHpo.getAncestorsStream(abnormalCirculatingHormoneConcentrationId, false)
+                .map(termIdToNode(curieUtil, phenolOntology))
+                .collect(Collectors.toUnmodifiableSet());
+        Set<Node> phenolDescendents = phenolHpo.getDescendantsStream(abnormalCirculatingHormoneConcentrationId, false)
+                .map(termIdToNode(curieUtil, phenolOntology))
+                .collect(Collectors.toUnmodifiableSet());
+
+        Ontology<Node, Node> ristrettoHpo = TestOntologyGraphs.ristrettoHpo();
+
+        Set<Node> ristrettoAncestors = ristrettoHpo.ancestors(abnormalCirculatingHormoneConcentration);
+        Set<Node> ristrettoDescendents = ristrettoHpo.descendents(abnormalCirculatingHormoneConcentration);
+
+        assertThat(ristrettoAncestors, equalTo(phenolAncestors));
+        assertThat(ristrettoDescendents, equalTo(phenolDescendents));
+    }
+
+    private static Function<TermId, Node> termIdToNode(CurieUtil curieUtil, MinimalOntology minimalOntology) {
+        return termId -> Node.of(curieUtil.getIri(termId).orElseThrow(), minimalOntology.termForTermId(termId).orElseThrow().getName());
+    }
 }

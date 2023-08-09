@@ -343,7 +343,7 @@ class OntologyTest {
     }
 
     <N, V> Set<N> descendents(N node, Ontology<N, V> graph) {
-        Deque<N> deque = new ArrayDeque<>(graph.nodeCount());
+        Deque<N> deque = new ArrayDeque<>();
         deque.push(node);
         Set<N> descendents = new LinkedHashSet<>();
         N current;
@@ -360,7 +360,7 @@ class OntologyTest {
     }
 
     <N, V> Set<N> ancestors(N node, Ontology<N, V> graph) {
-        Deque<N> deque = new ArrayDeque<>(graph.nodeCount());
+        Deque<N> deque = new ArrayDeque<>();
         deque.push(node);
         Set<N> ancestors = new LinkedHashSet<>();
         N current;

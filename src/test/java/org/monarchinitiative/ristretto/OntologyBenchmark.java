@@ -7,10 +7,13 @@ import org.monarchinitiative.phenol.io.utils.CurieUtilBuilder;
 import org.monarchinitiative.phenol.ontology.data.MinimalOntology;
 import org.monarchinitiative.phenol.ontology.data.TermId;
 import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.Group;
 import org.openjdk.jmh.infra.Blackhole;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+
+import java.util.stream.Collectors;
 
 public class OntologyBenchmark {
 
@@ -55,6 +58,12 @@ public class OntologyBenchmark {
 //    OntologyBenchmark.risrettoPredecessors  thrpt    5  3393.475 ± 1015.671  ops/s
 //    OntologyBenchmark.risrettoSuccessors    thrpt    5  3432.519 ±   78.624  ops/s
 
+    //Benchmark                               Mode  Cnt   Score    Error  Units
+    //OntologyBenchmark.phenolAncestors      thrpt    5  17.923 ±  0.555  ops/s
+    //OntologyBenchmark.phenolDescendents    thrpt    5  22.421 ±  8.016  ops/s
+    //OntologyBenchmark.risrettoAncestors    thrpt    5  108.372 ± 1.895  ops/s
+    //OntologyBenchmark.risrettoDescendents  thrpt    5   71.267 ± 1.724  ops/s
+
     private static final Ontology<Node, Node> ristrettoHpo = TestOntologyGraphs.ristrettoHpo();
     private static final ValueGraph<Node, Node> guavaHpo = TestOntologyGraphs.guavaValueGraphHpo();
     private static final OntologyGraph<TermId> phenolHpo = setupPhenolHpo();
@@ -97,6 +106,18 @@ public class OntologyBenchmark {
     }
 
     @Benchmark
+    public void phenolAncestors(Blackhole blackhole) {
+        OntologyGraph<TermId> hpo = phenolHpo;
+        hpo.forEach(node -> blackhole.consume(hpo.getAncestorsStream(node, false).collect(Collectors.toUnmodifiableSet())));
+    }
+
+    @Benchmark
+    public void phenolDescendents(Blackhole blackhole) {
+        OntologyGraph<TermId> hpo = phenolHpo;
+        hpo.forEach(node -> blackhole.consume(hpo.getDescendantsStream(node, false).collect(Collectors.toUnmodifiableSet())));
+    }
+
+    @Benchmark
     public void risrettoSuccessors(Blackhole blackhole) {
         Ontology<Node, Node> hpo = ristrettoHpo;
         for (Node node : hpo.nodes()) {
@@ -125,6 +146,22 @@ public class OntologyBenchmark {
         Ontology<Node, Node> hpo = ristrettoHpo;
         for (Node node : hpo.nodes()) {
             blackhole.consume(hpo.outDegree(node));
+        }
+    }
+
+    @Benchmark
+    public void risrettoAncestors(Blackhole blackhole) {
+        Ontology<Node, Node> hpo = ristrettoHpo;
+        for (Node node : hpo.nodes()) {
+            blackhole.consume(hpo.ancestors(node));
+        }
+    }
+
+    @Benchmark
+    public void risrettoDescendents(Blackhole blackhole) {
+        Ontology<Node, Node> hpo = ristrettoHpo;
+        for (Node node : hpo.nodes()) {
+            blackhole.consume(hpo.descendents(node));
         }
     }
 
